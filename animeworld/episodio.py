@@ -34,13 +34,27 @@ class Episodio:
         self.__legacy = legacy
 
     @property
+    def token(self) -> Optional[str]:
+        """
+        Token episodio (ultimo segmento dell'URL pagina episodio, es. `fznfor`).
+
+        Usato dal nuovo endpoint `/api/episode/info?id=<token>` che ha sostituito
+        il vecchio `/api/download/<id>` (deprecato da AnimeWorld nel 2024).
+
+        Returns:
+          Il token episodio, oppure `None` se non disponibile.
+        """
+        if not self.__legacy: return None
+        return self.__legacy[0]["link"].rstrip("/").split("/")[-1]
+
+    @property
     def links(self) -> List[Server]: # lista dei provider dove sono hostati gli ep
         """
         Ottiene la lista dei server in cui è hostato l'episodio.
 
         Returns:
           Lista di oggetti Server.
-        
+
         Example:
           ```py
           return [
@@ -49,24 +63,7 @@ class Episodio:
           ]
           ```
         """
-        tmp = [] # tutti i links
-        res = SES.post(self.__link, timeout=(3, 27), follow_redirects=True)
-        data = res.json()
-
-        for provID in data["links"]:
-            key = [x for x in data["links"][provID].keys() if x != 'server'][0]
-            tmp.append({
-                "id": int(provID),
-                "name": data["links"][provID]["server"]["name"],
-                "link": data["links"][provID][key]["link"]
-            })
-        
-        for prov in self.__legacy:
-            if str(prov['id']) in data["links"].keys(): continue
-
-            tmp.append(prov)
-
-        return self.__setServer(tmp, self.number)
+        return self.__setServer(list(self.__legacy), self.number)
 
     def fileInfo(self) -> Dict[str,str]:
         """

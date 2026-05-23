@@ -220,7 +220,11 @@ class Server:
             if ext == 'octet-stream': ext = 'mp4'
             file = f"{title}.{ext}"
 
-            total_length = int(r.headers.get('content-length'))
+            # Alcuni CDN (es. risposte gzip o transfer-encoding: chunked)
+            # omettono Content-Length: in tal caso il totale è sconosciuto
+            # e percentuale/eta vengono riportati come 0.
+            cl = r.headers.get('content-length')
+            total_length = int(cl) if cl is not None else 0
             current_lenght = 0
             start = time.time()
             step = time.time()
@@ -231,43 +235,43 @@ class Server:
 
             try:
                 for chunk in r.iter_bytes(chunk_size = 524288):
-                    if chunk: 
+                    if chunk:
                         fd.write(chunk)
                         fd.flush()
-                        
+
                         current_lenght += len(chunk)
 
                         hook({
                             'total_bytes': total_length,
                             'downloaded_bytes': current_lenght,
-                            'percentage': current_lenght/total_length,
+                            'percentage': current_lenght/total_length if total_length else 0,
                             'speed': len(chunk) / (time.time() - step) if (time.time() - step) != 0 else 0,
                             'elapsed': time.time() - start,
                             'filename': file,
-                            'eta': ((total_length - current_lenght) / len(chunk)) * (time.time() - step),
+                            'eta': ((total_length - current_lenght) / len(chunk)) * (time.time() - step) if total_length else 0,
                             'status': 'downloading' if "abort" not in opt else "aborted"
                         })
 
                         if "abort" in opt: raise HardStoppedDownload(file)
 
                         step = time.time()
-                        
+
                 else:
                     hook({
-                        'total_bytes': total_length,
-                        'downloaded_bytes': total_length,
+                        'total_bytes': total_length or current_lenght,
+                        'downloaded_bytes': total_length or current_lenght,
                         'percentage': 1,
                         'speed': 0,
                         'elapsed': time.time() - start,
                         'eta': 0,
                         'status': 'finished'
                     })
-                    
+
                     if isinstance(folder, str): fd.close()
                     else: fd.seek(0)
                     return file # Se il file è stato scaricato correttamente
             except HardStoppedDownload:
-                if isinstance(folder, str): 
+                if isinstance(folder, str):
                     fd.close()
                     os.remove(f"{os.path.join(folder,file)}")
                 else: fd.seek(0)

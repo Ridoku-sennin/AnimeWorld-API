@@ -149,12 +149,18 @@ class TestServer(unittest.TestCase):
     if len(servers) == 0:
       self.skipTest('Il server AnimeWorld_Server non esiste in questo episodio.')
       return
-    
+
     server = servers[0]
 
     self.assertEqual(server.Nid, 9)
     self.assertEqual(server.name, "AnimeWorld Server")
-    self.assertIsInstance(server.fileLink(), str)
+
+    link = server.fileLink()
+    self.assertIsInstance(link, str)
+    # Il nuovo endpoint /api/episode/info restituisce un grabber che punta
+    # ad un MP4 servito dal CDN, non più alla pagina HTML.
+    self.assertTrue(link.startswith("http"), f"fileLink dovrebbe essere un URL CDN, è: {link}")
+    self.assertNotIn("/play/", link, "fileLink non deve essere l'URL della pagina episodio")
 
     info = server.fileInfo()
     self.assertIsInstance(info, dict)
@@ -164,6 +170,15 @@ class TestServer(unittest.TestCase):
     self.assertIn("server_name", info)
     self.assertIn("server_id", info)
     self.assertIn("url", info)
+    self.assertGreater(info["total_bytes"], 0, "Content-Length deve essere noto sul CDN")
+
+    with self.subTest('Animeworld_Server MP4 magic bytes'):
+      # Verifica end-to-end che il file scaricato dal nuovo endpoint sia
+      # davvero un MP4 valido (magic box `ftyp` nei primi 32 byte).
+      with aw.SES.stream("GET", link, follow_redirects=True, timeout=30) as r:
+        r.raise_for_status()
+        head = next(r.iter_bytes(chunk_size=64))
+      self.assertIn(b'ftyp', head, f"Il file scaricato non sembra un MP4: {head!r}")
 
     with self.subTest('Animeworld_Server Download'):
       buf = io.BytesIO()

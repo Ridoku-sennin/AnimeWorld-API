@@ -256,26 +256,28 @@ class Anime:
             for data in prov_soup.select('li.episode > a'):
                 epNum = data.get('data-episode-num')
                 epID = data.get('data-episode-id')
+                epHref = data.get("href")
+                epToken = epHref.rstrip("/").split("/")[-1]
 
                 if epID not in raw_eps:
                     raw_eps[epID] = {
                         'number': epNum,
-                        'link': str(SES.build_url(f"/api/download/{epID}")),
+                        'link': str(SES.build_url(f"/api/episode/info?id={epToken}&alt=0")),
                         'legacy': [{
                             "id": int(provID),
                             "name": provLegacy[provID]["name"],
-                            "link": str(SES.build_url(data.get("href")))
+                            "link": str(SES.build_url(epHref))
                         }]
                     }
                 else:
                     raw_eps[epID]['legacy'].append({
                     "id": int(provID),
                     "name": provLegacy[provID]["name"],
-                    "link": str(SES.build_url(data.get("href")))
+                    "link": str(SES.build_url(epHref))
                 })
 
         return [
-            Episodio(x['number'], x['link'], x['legacy']) 
+            Episodio(x['number'], x['link'], x['legacy'])
             for x in list(raw_eps.values())
             if not nums or x['number'] in nums
         ]
